@@ -13,7 +13,7 @@
 
 #define LCD_ACTIVE_VOLTAGE 255
 #define LCD_POWERSAVING_VOLTAGE 16
-#define LCD_DEEPSLEEP_VOLTAGE 0    // Complete LCD shutdown
+#define LCD_DEEPSLEEP_VOLTAGE 16    // Complete LCD shutdown
 
 #define NOTHING_REQUESTED 0
 #define START_REQUESTED 1
