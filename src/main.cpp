@@ -7,6 +7,7 @@
 #include <WiFiClientSecure.h>
 #include "esp_wifi.h"
 #include "esp_pm.h"
+#include "esp_err.h"
 
 #include "LCD.h"
 #include "InputModule.h"
@@ -70,13 +71,20 @@ void setup()
   // Configure WiFi power management
   esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
   
-  // Configure CPU power management
+  // Configure CPU power management (graceful fallback if not supported)
   esp_pm_config_esp32_t pm_config = {
         .max_freq_mhz = 240,
         .min_freq_mhz = 80,    // Reduce minimum frequency for power saving
         .light_sleep_enable = true
   };
-  ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
+  esp_err_t pm_result = esp_pm_configure(&pm_config);
+  if (pm_result == ESP_OK) {
+    Serial.println("Power management configured successfully");
+  } else {
+    Serial.print("Power management configuration failed: ");
+    Serial.println(esp_err_to_name(pm_result));
+    Serial.println("Continuing without power management...");
+  }
 
   Serial.println("Ready");
   Serial.print("IP address: ");
