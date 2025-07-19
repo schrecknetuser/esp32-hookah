@@ -161,24 +161,30 @@ void OutputModule::processTick()
     powerSavingTimer->updateTimer();
     deepSleepTimer->updateTimer();
     
-    // Check for deep sleep first (complete LCD shutdown)
-    if(deepSleepTimer->isElapsed())
-    {
-        deepSleepTimer->setRunning(false);
-        deepSleepTimer->reset();
-        deepSleepTimer->clearElapsed();
-        lcd->deepSleepScreen();
-        return;
-    }
+    // Don't dim or deep sleep the screen when any timer is running
+    bool anyTimerRunning = mainTimer->timerRunning() || secondaryTimer->timerRunning();
     
-    // Check for power saving (LCD dimming)
-    if(powerSavingTimer->isElapsed())
+    if(!anyTimerRunning)
     {
-        powerSavingTimer->setRunning(false);
-        powerSavingTimer->reset();
-        powerSavingTimer->clearElapsed();
-        lcd->dimScreen();
-        return;
+        // Check for deep sleep first (complete LCD shutdown)
+        if(deepSleepTimer->isElapsed())
+        {
+            deepSleepTimer->setRunning(false);
+            deepSleepTimer->reset();
+            deepSleepTimer->clearElapsed();
+            lcd->deepSleepScreen();
+            return;
+        }
+        
+        // Check for power saving (LCD dimming)
+        if(powerSavingTimer->isElapsed())
+        {
+            powerSavingTimer->setRunning(false);
+            powerSavingTimer->reset();
+            powerSavingTimer->clearElapsed();
+            lcd->dimScreen();
+            return;
+        }
     }
     
     if (isOnMainTimer)
