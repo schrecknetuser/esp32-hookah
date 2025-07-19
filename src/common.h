@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 enum {
     ROT_0 = 0,
@@ -47,3 +49,6 @@ typedef struct {
 #define PUSHBUTTON_PIN 4
 
 void convertTimeToString(int minutes, int seconds, char* result, size_t bufferSize);
+
+// HTTP request coordination
+extern SemaphoreHandle_t httpMutex;

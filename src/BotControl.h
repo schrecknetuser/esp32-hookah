@@ -51,8 +51,8 @@ private:
 
     UniversalTelegramBot *bot;
 
-    // Checks for new messages every 1 second.
-    int botRequestDelay = 1000;
+    // Checks for new messages every 3 seconds to reduce HTTP load.
+    int botRequestDelay = 3000;
     unsigned long lastTimeBotRan;
 
     bool resetRequested;

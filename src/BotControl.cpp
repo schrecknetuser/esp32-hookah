@@ -1,4 +1,5 @@
 #include "BotControl.h"
+#include "common.h"
 
 Bot::Bot(WiFiClientSecure &client)
 {
@@ -22,13 +23,48 @@ void Bot::checkNewMessages()
 {
     if (millis() > lastTimeBotRan + botRequestDelay)
     {
-        int numNewMessages = bot->getUpdates(bot->last_message_received + 1);
-
-        while (numNewMessages)
-        {            
-            handleNewMessages(numNewMessages);            
-            numNewMessages = bot->getUpdates(bot->last_message_received + 1);
+        // Check if WiFi is connected before making requests
+        if (WiFi.status() != WL_CONNECTED) {
+            Serial.println("Bot: WiFi not connected, skipping bot check");
+            lastTimeBotRan = millis();
+            return;
         }
+        
+        // Take mutex to coordinate HTTP requests with other modules
+        if (xSemaphoreTake(httpMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+            Serial.println("Bot: Checking for new messages");
+            int numNewMessages = 0;
+            
+            try {
+                numNewMessages = bot->getUpdates(bot->last_message_received + 1);
+            } catch (...) {
+                Serial.println("Bot: Error getting Telegram updates");
+                xSemaphoreGive(httpMutex);
+                lastTimeBotRan = millis();
+                return;
+            }
+
+            while (numNewMessages)
+            {            
+                handleNewMessages(numNewMessages);            
+                
+                // Add safety check to prevent infinite loop
+                int nextMessages = 0;
+                try {
+                    nextMessages = bot->getUpdates(bot->last_message_received + 1);
+                } catch (...) {
+                    Serial.println("Bot: Error getting next Telegram updates");
+                    break;
+                }
+                numNewMessages = nextMessages;
+            }
+            
+            // Release mutex
+            xSemaphoreGive(httpMutex);
+        } else {
+            Serial.println("Bot: Failed to acquire HTTP mutex - skipping update");
+        }
+        
         lastTimeBotRan = millis();
     }
 }
@@ -82,23 +118,31 @@ void Bot::botSetup()
 
 void Bot::sendBotControlMessage(String &chat_id)
 {
-    static const char message[] PROGMEM = "Hello";
-    
-    bot->sendMessage(chat_id, FPSTR(message), "");
-    
-    // Store keyboard JSON in flash memory to save RAM
-    static const char keyboardJson[] PROGMEM = 
-        "["
-        "[{\"text\":\"Reset\", \"callback_data\":\"" RESET_REQUEST "\"}, {\"text\":\"Start\", \"callback_data\":\"" START_REQUEST "\"}," 
-        "{\"text\":\"Stop\", \"callback_data\":\"" STOP_REQUEST "\"}]," 
-        "[{\"text\":\"5 min\", \"callback_data\":\"" SET_TIME_REQUEST " 5:00\"}," 
-        "{\"text\":\"7 min\", \"callback_data\":\"" SET_TIME_REQUEST " 7:00\"},"
-        "{\"text\":\"10 min\", \"callback_data\":\"" SET_TIME_REQUEST " 10:00\"}]"
-        "]";
-    
-    static const char controlMsg[] PROGMEM = "Choose from one of the following options";
-    
-    bot->sendMessageWithInlineKeyboard(chat_id, FPSTR(controlMsg), "", FPSTR(keyboardJson));
+    // Take mutex to coordinate HTTP requests
+    if (xSemaphoreTake(httpMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+        static const char message[] PROGMEM = "Hello";
+        
+        bot->sendMessage(chat_id, FPSTR(message), "");
+        
+        // Store keyboard JSON in flash memory to save RAM
+        static const char keyboardJson[] PROGMEM = 
+            "["
+            "[{\"text\":\"Reset\", \"callback_data\":\"" RESET_REQUEST "\"}, {\"text\":\"Start\", \"callback_data\":\"" START_REQUEST "\"}," 
+            "{\"text\":\"Stop\", \"callback_data\":\"" STOP_REQUEST "\"}]," 
+            "[{\"text\":\"5 min\", \"callback_data\":\"" SET_TIME_REQUEST " 5:00\"}," 
+            "{\"text\":\"7 min\", \"callback_data\":\"" SET_TIME_REQUEST " 7:00\"},"
+            "{\"text\":\"10 min\", \"callback_data\":\"" SET_TIME_REQUEST " 10:00\"}]"
+            "]";
+        
+        static const char controlMsg[] PROGMEM = "Choose from one of the following options";
+        
+        bot->sendMessageWithInlineKeyboard(chat_id, FPSTR(controlMsg), "", FPSTR(keyboardJson));
+        
+        // Release mutex
+        xSemaphoreGive(httpMutex);
+    } else {
+        Serial.println("Failed to acquire HTTP mutex for bot message - skipping");
+    }
 }
 
 // Handle what happens when you receive new messages

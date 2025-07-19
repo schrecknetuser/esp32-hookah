@@ -11,6 +11,9 @@
 #include "InputModule.h"
 #include "OutputModule.h"
 
+// HTTP request coordination mutex
+SemaphoreHandle_t httpMutex;
+
 LCD *lcd;
 
 InputModule *inputModule;
@@ -64,7 +67,7 @@ void botLoop(void *context)
   while (true)
   {
     inputModule->pollBot();
-    vTaskDelay(1);
+    vTaskDelay(pdMS_TO_TICKS(BOT_LOOP_DELAY_MS));
   }
 }
 
@@ -72,6 +75,13 @@ void setup()
 {
   Serial.begin(115200);
   Serial.println("Setup started");
+  
+  // Initialize HTTP request coordination mutex
+  httpMutex = xSemaphoreCreateMutex();
+  if (httpMutex == NULL) {
+    Serial.println("Failed to create HTTP mutex");
+    ESP.restart();
+  }
   
   // Print initial free heap memory
   Serial.print("Initial free heap: ");
@@ -109,8 +119,8 @@ void setup()
   Serial.print("Free heap before tasks: ");
   Serial.println(ESP.getFreeHeap());
 
-  // Optimized stack sizes for RAM efficiency
-  xTaskCreatePinnedToCore(botLoop, "botLoop", 6144, NULL, 1, NULL, 1);  // Reduced from 65KB to 6KB
+  // Optimized stack sizes for RAM efficiency - increased botLoop for HTTP operations
+  xTaskCreatePinnedToCore(botLoop, "botLoop", 8192, NULL, 1, NULL, 1);  // Increased from 6KB to 8KB for HTTP stability
   xTaskCreatePinnedToCore(mainLoop, "mainLoop", 2048, NULL, 1, NULL, 0); // Reduced from 4KB to 2KB
 
   // Print free heap after creating tasks
