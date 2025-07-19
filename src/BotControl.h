@@ -38,9 +38,6 @@ public:
 
 private:
 
-
-    int splitBySpaces(String text, String *stringArray, int stringArraySize);
-
     void processSetTimeCommand(String text);
     void processResetCommand();
     void processStartCommand();

@@ -33,42 +33,22 @@ void Bot::checkNewMessages()
     }
 }
 
-int Bot::splitBySpaces(String text, String *stringArray, int stringArraySize)
-{
-    int i = 0;
-    int k = 0;
-    int n = 0;
-    int cnt = 0;
-    char string[MAX_STRING_LENGTH];
-
-    while (cnt < stringArraySize)
-    {
-        while (text[i] != ' ' && text[i])
-        {
-            string[k] = text[i];
-            i++;
-            k++;
-        }
-        i++;
-        string[k] = 0;
-        stringArray[n] = string;
-        k = 0;
-        n++;
-        cnt++;
-    }
-
-    return n;
-}
-
 void Bot::processSetTimeCommand(String text)
 {
-    String stringArray[2];
-    char output[MAX_STRING_LENGTH];
-
-    if(splitBySpaces(text, stringArray, 2) != 2)
-        return;
-
-    sscanf(stringArray[1].c_str(), "%d:%d", &requestedMinutes, &requestedSeconds);
+    char stringArray[2][MAX_STRING_LENGTH];  // Static allocation instead of String array
+    char tempBuffer[MAX_STRING_LENGTH];
+    
+    strncpy(tempBuffer, text.c_str(), sizeof(tempBuffer) - 1);
+    tempBuffer[sizeof(tempBuffer) - 1] = '\0';
+    
+    // Simple parsing: find space and split
+    char* space = strchr(tempBuffer, ' ');
+    if (!space) return;
+    
+    *space = '\0';  // Split the string
+    char* timeStr = space + 1;
+    
+    sscanf(timeStr, "%d:%d", &requestedMinutes, &requestedSeconds);
     setTimeRequested = true;
 }
 
@@ -102,20 +82,23 @@ void Bot::botSetup()
 
 void Bot::sendBotControlMessage(String &chat_id)
 {
-    String message;
-    String currentTime;
-    message = "Hello";
-
-    bot->sendMessage(chat_id, message, "");
-    String keyboardJson = F(
+    static const char message[] PROGMEM = "Hello";
+    
+    bot->sendMessage(chat_id, FPSTR(message), "");
+    
+    // Store keyboard JSON in flash memory to save RAM
+    static const char keyboardJson[] PROGMEM = 
         "["
         "[{\"text\":\"Reset\", \"callback_data\":\"" RESET_REQUEST "\"}, {\"text\":\"Start\", \"callback_data\":\"" START_REQUEST "\"}," 
         "{\"text\":\"Stop\", \"callback_data\":\"" STOP_REQUEST "\"}]," 
         "[{\"text\":\"5 min\", \"callback_data\":\"" SET_TIME_REQUEST " 5:00\"}," 
         "{\"text\":\"7 min\", \"callback_data\":\"" SET_TIME_REQUEST " 7:00\"},"
         "{\"text\":\"10 min\", \"callback_data\":\"" SET_TIME_REQUEST " 10:00\"}]"
-        "]");
-    bot->sendMessageWithInlineKeyboard(chat_id, "Choose from one of the following options", "", keyboardJson);
+        "]";
+    
+    static const char controlMsg[] PROGMEM = "Choose from one of the following options";
+    
+    bot->sendMessageWithInlineKeyboard(chat_id, FPSTR(controlMsg), "", FPSTR(keyboardJson));
 }
 
 // Handle what happens when you receive new messages

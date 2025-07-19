@@ -31,6 +31,10 @@ typedef struct {
 #define MAIN_LOOP_DELAY_MS 100  // Reduced from 1ms to 100ms
 #define BOT_LOOP_DELAY_MS 2000  // Reduced from 1ms to 2 seconds
 
+// Memory monitoring (debug only - should be disabled in production)
+#define ENABLE_MEMORY_MONITORING 1
+#define MEMORY_CHECK_INTERVAL_MS 30000  // Check every 30 seconds
+
 #define SECONDARY_MINUTES 0
 #define SECONDARY_SECONDS 15
 
@@ -42,4 +46,4 @@ typedef struct {
 #define LED_BLUE_PIN 25
 #define PUSHBUTTON_PIN 4
 
-void convertTimeToString(int minutes, int seconds, String& result);
+void convertTimeToString(int minutes, int seconds, char* result, size_t bufferSize);

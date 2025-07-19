@@ -18,8 +18,26 @@ OutputModule *outputModule;
 
 void mainLoop(void *context)
 {
+#if ENABLE_MEMORY_MONITORING
+  static unsigned long lastMemoryCheck = 0;
+  static size_t minFreeHeap = SIZE_MAX;  // Track minimum free heap
+#endif
+
   while (true)
   {
+#if ENABLE_MEMORY_MONITORING
+    // Periodic memory monitoring
+    unsigned long now = millis();
+    if (now - lastMemoryCheck >= MEMORY_CHECK_INTERVAL_MS) {
+      size_t currentHeap = ESP.getFreeHeap();
+      if (currentHeap < minFreeHeap) {
+        minFreeHeap = currentHeap;
+      }
+      Serial.printf("Free heap: %u bytes (min: %u bytes)\n", currentHeap, minFreeHeap);
+      lastMemoryCheck = now;
+    }
+#endif
+
     inputModule->processRequests();
     if (inputModule->isStartRequested())
       outputModule->processStart();
@@ -54,6 +72,13 @@ void setup()
 {
   Serial.begin(115200);
   Serial.println("Setup started");
+  
+  // Print initial free heap memory
+  Serial.print("Initial free heap: ");
+  Serial.println(ESP.getFreeHeap());
+  
+  // Configure WiFi with power-efficient settings
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);  // Reduce TX power to save energy and RAM
 
   // Enable WiFi power saving
   WiFi.mode(WIFI_STA);
@@ -80,8 +105,17 @@ void setup()
   inputModule = new InputModule(lcd);
   outputModule = new OutputModule(lcd);
 
-  xTaskCreatePinnedToCore(botLoop, "botLoop", 4096*16, NULL, 1, NULL, 1);
-  xTaskCreatePinnedToCore(mainLoop, "mainLoop", 4096, NULL, 1, NULL, 0);
+  // Print free heap before creating tasks
+  Serial.print("Free heap before tasks: ");
+  Serial.println(ESP.getFreeHeap());
+
+  // Optimized stack sizes for RAM efficiency
+  xTaskCreatePinnedToCore(botLoop, "botLoop", 6144, NULL, 1, NULL, 1);  // Reduced from 65KB to 6KB
+  xTaskCreatePinnedToCore(mainLoop, "mainLoop", 2048, NULL, 1, NULL, 0); // Reduced from 4KB to 2KB
+
+  // Print free heap after creating tasks
+  Serial.print("Free heap after tasks: ");
+  Serial.println(ESP.getFreeHeap());
 
   Serial.println("Setup finished");
 }

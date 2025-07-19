@@ -87,24 +87,31 @@ void LCD::clearStartStop()
     lcd->setTextColor(ILI9341_BLACK);
     lcd->setCursor(startTextX, startTextY);
     lcd->setTextSize(2);
-    lcd->print("START");
+    
+    static const char startText[] PROGMEM = "START";
+    lcd->print(FPSTR(startText));
 
     lcd->drawRect(startStopX, startStopY, startStopWidth, startStopHeight, ILI9341_BLACK);
     lcd->setTextColor(ILI9341_BLACK);
     lcd->setCursor(stopTextX, stopTextY);
     lcd->setTextSize(2);
-    lcd->print("STOP");
+    
+    static const char stopText[] PROGMEM = "STOP";
+    lcd->print(FPSTR(stopText));
 }
 
 void LCD::drawStartStop()
 {
+    static const char startText[] PROGMEM = "START";
+    static const char stopText[] PROGMEM = "STOP";
+    
     if(!isTimerStarted())
     {
         lcd->drawRect(startStopX, startStopY, startStopWidth, startStopHeight, ILI9341_GREEN);
         lcd->setTextColor(ILI9341_GREEN);
         lcd->setCursor(startTextX, startTextY);
         lcd->setTextSize(2);
-        lcd->print("START");
+        lcd->print(FPSTR(startText));
     }
     else
     {
@@ -112,7 +119,7 @@ void LCD::drawStartStop()
         lcd->setTextColor(ILI9341_RED);
         lcd->setCursor(stopTextX, stopTextY);
         lcd->setTextSize(2);
-        lcd->print("STOP");
+        lcd->print(FPSTR(stopText));
     }
     
 }
@@ -122,8 +129,8 @@ void LCD::drawTime(bool force)
     if(currentMinutes == newMinutes && currentSeconds == newSeconds && !force)
         return;
     lcd->drawRect(timeX, timeY, timeWidth, timeHeight, timeColor);
-    String timeString;
-    convertTimeToString(currentMinutes, currentSeconds, timeString);
+    char timeString[8];  // Buffer for "MM:SS\0"
+    convertTimeToString(currentMinutes, currentSeconds, timeString, sizeof(timeString));
 
     lcd->setTextSize(3);
     lcd->setCursor(timeTextX, timeTextY);
@@ -131,7 +138,7 @@ void LCD::drawTime(bool force)
     lcd->setTextColor(ILI9341_BLACK);
     lcd->print(timeString);
 
-    convertTimeToString(newMinutes, newSeconds, timeString);
+    convertTimeToString(newMinutes, newSeconds, timeString, sizeof(timeString));
 
     lcd->setCursor(timeTextX, timeTextY);
     lcd->setTextColor(timeColor);
@@ -143,11 +150,13 @@ void LCD::drawTime(bool force)
 
 void LCD::drawReset()
 {
+    static const char resetText[] PROGMEM = "RESET";
+    
     lcd->drawRect(resetX, resetY, resetWidth, resetHeight, ILI9341_WHITE);
     lcd->setTextColor(ILI9341_WHITE);
     lcd->setCursor(resetTextX, resetTextY);
     lcd->setTextSize(2);
-    lcd->print("RESET");
+    lcd->print(FPSTR(resetText));
 }
 
 void LCD::update(bool force)
