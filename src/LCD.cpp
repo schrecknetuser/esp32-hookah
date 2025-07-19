@@ -63,6 +63,11 @@ void LCD::dimScreen()
     analogWrite(LCD_LED, LCD_POWERSAVING_VOLTAGE);
 }
 
+void LCD::deepSleepScreen()
+{
+    analogWrite(LCD_LED, LCD_DEEPSLEEP_VOLTAGE);
+}
+
 void LCD::drawHookah()
 {
     lcd->drawRGBBitmap(0, 0, (uint16_t *)HOOKAH_BITMAP, HOOKAH_BITMAP_WIDTH, HOOKAH_BITMAP_HEIGHT);

@@ -5,6 +5,8 @@
 #include <WiFiUdp.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include "esp_wifi.h"
+#include "esp_pm.h"
 
 #include "LCD.h"
 #include "InputModule.h"
@@ -29,9 +31,14 @@ void mainLoop(void *context)
     if (inputModule->isSetTimeRequested())
       outputModule->processSetTime(inputModule->getRequestedMinutes(), inputModule->getRequestedSeconds());
 
+    // Reset power timers if any input was processed
+    if (inputModule->isStartRequested() || inputModule->isStopRequested() || 
+        inputModule->isResetRequested() || inputModule->isSetTimeRequested())
+      outputModule->resetPowerTimers();
+
     inputModule->clearRequests();
     outputModule->processTick();
-    vTaskDelay(1);
+    vTaskDelay(pdMS_TO_TICKS(MAIN_LOOP_DELAY_MS));
   }
 }
 
@@ -40,7 +47,7 @@ void botLoop(void *context)
   while (true)
   {
     inputModule->pollBot();
-    vTaskDelay(1);
+    vTaskDelay(pdMS_TO_TICKS(BOT_LOOP_DELAY_MS));
   }
 }
 
@@ -49,6 +56,7 @@ void setup()
   Serial.begin(115200);
   Serial.println("Setup started");
 
+  // Enable WiFi power saving
   WiFi.mode(WIFI_STA);
   WiFi.begin(SSID, WIFIPASSWORD);
 
@@ -58,6 +66,17 @@ void setup()
     delay(5000);
     ESP.restart();
   }
+
+  // Configure WiFi power management
+  esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
+  
+  // Configure CPU power management
+  esp_pm_config_esp32_t pm_config = {
+        .max_freq_mhz = 240,
+        .min_freq_mhz = 80,    // Reduce minimum frequency for power saving
+        .light_sleep_enable = true
+  };
+  ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
 
   Serial.println("Ready");
   Serial.print("IP address: ");

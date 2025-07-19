@@ -25,6 +25,12 @@ typedef struct {
 #define POWERSAVING_TIMEOUT_MINUTES 1
 #define POWERSAVING_TIMEOUT_SECONDS 0
 
+// Power saving configuration
+#define DEEP_SLEEP_TIMEOUT_MINUTES 5
+#define DEEP_SLEEP_TIMEOUT_SECONDS 0
+#define MAIN_LOOP_DELAY_MS 100  // Reduced from 1ms to 100ms
+#define BOT_LOOP_DELAY_MS 2000  // Reduced from 1ms to 2 seconds
+
 #define SECONDARY_MINUTES 0
 #define SECONDARY_SECONDS 15
 

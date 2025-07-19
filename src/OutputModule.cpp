@@ -6,6 +6,7 @@ OutputModule::OutputModule(LCD *lcdScreen)
     mainTimer = new Timer();
     secondaryTimer = new Timer(0, 0, UP);
     powerSavingTimer = new Timer(POWERSAVING_TIMEOUT_MINUTES, POWERSAVING_TIMEOUT_SECONDS);
+    deepSleepTimer = new Timer(DEEP_SLEEP_TIMEOUT_MINUTES, DEEP_SLEEP_TIMEOUT_SECONDS);
     httpControl = new HttpControl();
 
     percentage = 100;
@@ -15,15 +16,20 @@ OutputModule::OutputModule(LCD *lcdScreen)
     lcd->update(true);
     lcd->dimScreen();
 
-    pinMode(LED_RED_PIN, OUTPUT);
-    pinMode(LED_GREEN_PIN, OUTPUT);
-    pinMode(LED_BLUE_PIN, OUTPUT);
+    // Start power saving timers
+    powerSavingTimer->setRunning(true);
+    deepSleepTimer->setRunning(true);
+
+    // Don't configure LED pins until needed (power saving)
+    disableLed();  // This will set initial state and configure pin correctly
 
     isOnMainTimer = true;
 }
 
 void OutputModule::enableLed()
 {
+    // Only configure LED pin when actually needed
+    pinMode(LED_RED_PIN, OUTPUT);
     analogWrite(LED_RED_PIN, 255);
 }
 
@@ -37,6 +43,8 @@ void OutputModule::setPrimaryIndication()
 void OutputModule::disableLed()
 {
     analogWrite(LED_RED_PIN, 0);
+    // Set pin back to input to save power when not needed
+    pinMode(LED_RED_PIN, INPUT);
 }
 
 void OutputModule::setSecondaryIndication()
@@ -107,6 +115,7 @@ void OutputModule::processStart()
     lcd->brightenScreen();
     mainTimer->setRunning(true);
     lcd->processStartRequest();
+    resetPowerTimers();  // Reset power timers on user activity
 }
 
 void OutputModule::processStop()
@@ -115,10 +124,9 @@ void OutputModule::processStop()
         mainTimer->setRunning(false);
 
     switchToMainTimer(false);
+    lcd->brightenScreen();  // Wake up the screen
     lcd->processStopRequest();
-    powerSavingTimer->reset();
-    powerSavingTimer->setRunning(true);
-    
+    resetPowerTimers();  // Reset power timers on user activity
 }
 
 void OutputModule::processReset()
@@ -133,18 +141,37 @@ void OutputModule::processReset()
     switchToMainTimer(true);
     if (currentlyOnSecondaryTimer)
         mainTimer->setRunning(true);
+    
+    lcd->brightenScreen();  // Wake up the screen
+    resetPowerTimers();  // Reset power timers on user activity
 }
 
 void OutputModule::processSetTime(int minutes, int seconds)
 {
     mainTimer->setTime(minutes, seconds);
     lcd->setNewTime(minutes, seconds);
+    lcd->brightenScreen();  // Wake up the screen
     lcd->update(true);
+    resetPowerTimers();  // Reset power timers on user activity
 }
 
 void OutputModule::processTick()
 {
+    // Update power management timers
     powerSavingTimer->updateTimer();
+    deepSleepTimer->updateTimer();
+    
+    // Check for deep sleep first (complete LCD shutdown)
+    if(deepSleepTimer->isElapsed())
+    {
+        deepSleepTimer->setRunning(false);
+        deepSleepTimer->reset();
+        deepSleepTimer->clearElapsed();
+        lcd->deepSleepScreen();
+        return;
+    }
+    
+    // Check for power saving (LCD dimming)
     if(powerSavingTimer->isElapsed())
     {
         powerSavingTimer->setRunning(false);
@@ -153,6 +180,7 @@ void OutputModule::processTick()
         lcd->dimScreen();
         return;
     }
+    
     if (isOnMainTimer)
     {
         updateLcdTime(mainTimer);
@@ -167,4 +195,12 @@ void OutputModule::processTick()
     }
 
     lcd->update();
+}
+
+void OutputModule::resetPowerTimers()
+{
+    powerSavingTimer->reset();
+    powerSavingTimer->setRunning(true);
+    deepSleepTimer->reset();
+    deepSleepTimer->setRunning(true);
 }
