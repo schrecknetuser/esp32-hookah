@@ -55,7 +55,8 @@ void Bot::checkNewMessages()
             // Create a fresh client for this request to avoid socket reuse issues
             WiFiClientSecure* client = createSecureClient();
             UniversalTelegramBot bot(BOTtoken, *client);
-            bot.longPoll = 10;  // Short polling to prevent socket issues
+            //bot.longPoll = 10;  // Short polling to prevent socket issues
+            bot.longPoll = 0;  // Disable long polling to avoid socket issues
             
             int numNewMessages = 0;
             bool requestSuccessful = false;

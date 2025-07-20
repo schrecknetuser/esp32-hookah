@@ -63,7 +63,8 @@ void InputModule::pollBot()
 {
     // TEMPORARILY DISABLED: Bot functionality causing HTTP socket errors
     // Do nothing - bot is disabled to fix socket management issues
-    return;
+    // return;
+    processBot();
 }
 
 void InputModule::processBot()
@@ -97,5 +98,5 @@ void InputModule::processRequests()
 {
     processPushButton();
     processTouchScreen();
-    processBot();
+    //processBot();
 }

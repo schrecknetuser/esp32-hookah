@@ -69,7 +69,7 @@ void botLoop(void *context)
   
   while (true)
   {
-    inputModule->processBot();
+    inputModule->pollBot();
     
     // Reset power timers if any bot input was processed
     if (inputModule->isStartRequested() || inputModule->isStopRequested() || 
@@ -139,4 +139,6 @@ void setup()
   Serial.println("Setup finished");
 }
 
-void loop() {}
+void loop() {
+  vTaskDelete(NULL);
+}
