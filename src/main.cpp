@@ -67,7 +67,7 @@ void botLoop(void *context)
   while (true)
   {
     inputModule->pollBot();
-    vTaskDelay(pdMS_TO_TICKS(BOT_LOOP_DELAY_MS));
+    vTaskDelay(1);
   }
 }
 
@@ -102,7 +102,7 @@ void setup()
   }
 
   // Configure WiFi power management
-  esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
+  //esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
   
   // CPU power management removed due to compatibility issues
 
@@ -120,8 +120,8 @@ void setup()
   Serial.println(ESP.getFreeHeap());
 
   // Optimized stack sizes for RAM efficiency - increased botLoop for HTTP operations
-  xTaskCreatePinnedToCore(botLoop, "botLoop", 4096*4, NULL, 1, NULL, 1);  // Increased from 6KB to 8KB for HTTP stability
-  xTaskCreatePinnedToCore(mainLoop, "mainLoop", 4096, NULL, 1, NULL, 0); // Reduced from 4KB to 2KB
+  xTaskCreatePinnedToCore(botLoop, "botLoop", 4096*16, NULL, 1, NULL, 1);  // Increased from 6KB to 8KB for HTTP stability
+  xTaskCreatePinnedToCore(mainLoop, "mainLoop", 4096*2, NULL, 1, NULL, 0); // Reduced from 4KB to 2KB
 
   // Print free heap after creating tasks
   Serial.print("Free heap after tasks: ");

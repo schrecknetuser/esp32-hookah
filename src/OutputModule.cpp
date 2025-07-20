@@ -61,7 +61,7 @@ void OutputModule::switchToMainTimer(bool reset)
     if (reset)
     {
         mainTimer->reset();
-        httpControl->setPercentage(100);
+        httpControl->setPercentage(100, true);
     }
     secondaryTimer->reset();
     secondaryTimer->setRunning(false);
@@ -78,7 +78,7 @@ void OutputModule::updateLcdTime(Timer *timer)
         {
             auto current_seconds = timer->getCurrentMinutes()*SECONDS_IN_MINUTE + timer->getCurrentSeconds();
             auto max_seconds = timer->getInitialMinutes()*SECONDS_IN_MINUTE + timer->getInitialSeconds();
-            httpControl->setPercentage(100*current_seconds / max_seconds);
+            httpControl->setPercentage(100*current_seconds / max_seconds, true);
         }
         
         lcd->setNewTime(timer->getCurrentMinutes(), timer->getCurrentSeconds());

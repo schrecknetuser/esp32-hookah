@@ -31,12 +31,14 @@ void Bot::checkNewMessages()
         }
         
         // Take mutex to coordinate HTTP requests with other modules
-        if (xSemaphoreTake(httpMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+        if (xSemaphoreTakeRecursive(httpMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
             Serial.println("Bot: Checking for new messages");
             int numNewMessages = 0;
             
             try {
+                Serial.println("Bot: Getting Telegram updates");
                 numNewMessages = bot->getUpdates(bot->last_message_received + 1);
+                Serial.println("Bot: Got Telegram updates");
             } catch (...) {
                 Serial.println("Bot: Error getting Telegram updates");
                 xSemaphoreGive(httpMutex);
@@ -46,12 +48,16 @@ void Bot::checkNewMessages()
 
             while (numNewMessages)
             {            
-                handleNewMessages(numNewMessages);            
+                Serial.printf("Bot: Processing %d new messages\n", numNewMessages);
+                handleNewMessages(numNewMessages);    
+                Serial.println("Bot: Finished processing messages");        
                 
                 // Add safety check to prevent infinite loop
                 int nextMessages = 0;
                 try {
+                    Serial.printf("last_message_received: %ld\n", bot->last_message_received);
                     nextMessages = bot->getUpdates(bot->last_message_received + 1);
+                    Serial.printf("new last_message_received: %ld\n", bot->last_message_received);
                 } catch (...) {
                     Serial.println("Bot: Error getting next Telegram updates");
                     break;
@@ -60,6 +66,7 @@ void Bot::checkNewMessages()
             }
             
             // Release mutex
+            Serial.println("Bot: normal mutex release");
             xSemaphoreGive(httpMutex);
         } else {
             Serial.println("Bot: Failed to acquire HTTP mutex - skipping update");
@@ -119,7 +126,9 @@ void Bot::botSetup()
 void Bot::sendBotControlMessage(String &chat_id)
 {
     // Take mutex to coordinate HTTP requests
-    if (xSemaphoreTake(httpMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+    Serial.println("Bot: Attempting to take semaphore in sendBotControlMessage");
+    if (xSemaphoreTakeRecursive(httpMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+        Serial.println("Bot: Successfully took semaphore in sendBotControlMessage");
         static const char message[] PROGMEM = "Hello";
         
         bot->sendMessage(chat_id, FPSTR(message), "");
@@ -139,10 +148,12 @@ void Bot::sendBotControlMessage(String &chat_id)
         bot->sendMessageWithInlineKeyboard(chat_id, FPSTR(controlMsg), "", FPSTR(keyboardJson));
         
         // Release mutex
+        Serial.println("Bot: normal mutex release in sendBotControlMessage");
         xSemaphoreGive(httpMutex);
     } else {
         Serial.println("Failed to acquire HTTP mutex for bot message - skipping");
     }
+    Serial.println("Bot: Exiting sendBotControlMessage");
 }
 
 // Handle what happens when you receive new messages
@@ -179,8 +190,11 @@ void Bot::handleNewMessages(int numNewMessages)
             processResetCommand();            
         else if (text.startsWith(SET_TIME_REQUEST))
             processSetTimeCommand(text);
-        else if (text.startsWith(START_REQUEST))
+        else if (text.startsWith(START_REQUEST)) {
+            Serial.printf("Calling processStartCommand for text: %s\n", text.c_str());
             processStartCommand();
+            Serial.println("processStartCommand called successfully");
+        }
         else if (text.startsWith(STOP_REQUEST))
             processStopCommand();        
         sendBotControlMessage(chat_id);
