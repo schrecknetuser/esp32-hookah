@@ -64,14 +64,19 @@ void mainLoop(void *context)
 
 void botLoop(void *context)
 {
-  // TEMPORARILY DISABLED: Bot functionality causing HTTP socket errors
-  // This disables the Telegram bot to isolate and fix socket management issues
-  Serial.println("Bot: Telegram bot temporarily disabled to fix HTTP socket errors");
+  // Re-enabled bot functionality with fresh client approach
+  Serial.println("Bot: Starting bot loop with fresh client socket management");
   
   while (true)
   {
-    // Keep the task alive but don't poll the bot
-    vTaskDelay(pdMS_TO_TICKS(30000)); // Sleep for 30 seconds
+    inputModule->processBot();
+    
+    // Reset power timers if any bot input was processed
+    if (inputModule->isStartRequested() || inputModule->isStopRequested() || 
+        inputModule->isResetRequested() || inputModule->isSetTimeRequested())
+      outputModule->resetPowerTimers();
+    
+    vTaskDelay(pdMS_TO_TICKS(BOT_LOOP_DELAY_MS));
   }
 }
 
