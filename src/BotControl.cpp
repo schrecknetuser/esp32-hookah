@@ -10,7 +10,7 @@ Bot::Bot(WiFiClientSecure &client)
     
     // Configure client timeouts to prevent hanging
     client.setTimeout(5000);  // 5 second timeout
-    client.setConnectTimeout(3000);  // 3 second connect timeout
+    client.setConnectionTimeout(3000);  // 3 second connect timeout
     
     bot = new UniversalTelegramBot(BOTtoken, client);
     // Reduce long poll timeout to prevent socket issues
@@ -115,7 +115,7 @@ void Bot::resetConnection()
         // Reconfigure client settings
         client->setCACert(TELEGRAM_CERTIFICATE_ROOT);
         client->setTimeout(5000);
-        client->setConnectTimeout(3000);
+        client->setConnectionTimeout(3000);
     }
 }
 
