@@ -10,7 +10,7 @@ void HttpControl::sendRequest(JsonDocument& doc)
     while(triesCount < MAX_TRIES_COUNT) 
     {
         // Take mutex to coordinate HTTP requests
-        if (xSemaphoreTakeRecursive(httpMutex, pdMS_TO_TICKS(10000)) == pdTRUE) {
+        if (xSemaphoreTakeRecursive(httpMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
             Serial.println("HttpControl: Sending LED control request");
             
             HTTPClient http;

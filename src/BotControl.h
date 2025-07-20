@@ -55,6 +55,11 @@ private:
     int botRequestDelay = 3000;
     unsigned long lastTimeBotRan;
 
+    // Error recovery state
+    int consecutiveErrors = 0;
+    static const int MAX_CONSECUTIVE_ERRORS = 3;
+    static const int ERROR_BACKOFF_DELAY = 10000; // 10 seconds
+
     bool resetRequested;
     bool startRequested;
     bool stopRequested;

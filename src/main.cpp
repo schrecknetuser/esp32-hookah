@@ -58,7 +58,7 @@ void mainLoop(void *context)
 
     inputModule->clearRequests();
     outputModule->processTick();
-    vTaskDelay(1);
+    vTaskDelay(pdMS_TO_TICKS(MAIN_LOOP_DELAY_MS));
   }
 }
 
@@ -67,7 +67,7 @@ void botLoop(void *context)
   while (true)
   {
     inputModule->pollBot();
-    vTaskDelay(1);
+    vTaskDelay(pdMS_TO_TICKS(BOT_LOOP_DELAY_MS));
   }
 }
 
@@ -119,8 +119,8 @@ void setup()
   Serial.print("Free heap before tasks: ");
   Serial.println(ESP.getFreeHeap());
 
-  // Optimized stack sizes for RAM efficiency - increased botLoop for HTTP operations
-  xTaskCreatePinnedToCore(botLoop, "botLoop", 4096*16, NULL, 1, NULL, 1);  // Increased from 6KB to 8KB for HTTP stability
+  // Optimized stack sizes for RAM efficiency - reduced botLoop for better stability
+  xTaskCreatePinnedToCore(botLoop, "botLoop", 4096*8, NULL, 1, NULL, 1);  // Reduced to 8KB for stability
   xTaskCreatePinnedToCore(mainLoop, "mainLoop", 4096*2, NULL, 1, NULL, 0); // Reduced from 4KB to 2KB
 
   // Print free heap after creating tasks

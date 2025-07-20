@@ -8,6 +8,7 @@ Bot::Bot(WiFiClientSecure &client)
     bot = new UniversalTelegramBot(BOTtoken, client);
     //bot->longPoll = 60;
     lastTimeBotRan = millis();
+    consecutiveErrors = 0;  // Initialize error counter
     clearRequests();
 }
 
@@ -21,17 +22,25 @@ void Bot::clearRequests()
 
 void Bot::checkNewMessages()
 {
-    if (millis() > lastTimeBotRan + botRequestDelay)
+    int currentDelay = botRequestDelay;
+    
+    // Implement backoff if we've had consecutive errors
+    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        currentDelay = ERROR_BACKOFF_DELAY;
+    }
+    
+    if (millis() > lastTimeBotRan + currentDelay)
     {
         // Check if WiFi is connected before making requests
         if (WiFi.status() != WL_CONNECTED) {
             Serial.println("Bot: WiFi not connected, skipping bot check");
             lastTimeBotRan = millis();
+            consecutiveErrors++; // Treat WiFi disconnection as error for backoff
             return;
         }
         
-        // Take mutex to coordinate HTTP requests with other modules
-        if (xSemaphoreTakeRecursive(httpMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+        // Take mutex to coordinate HTTP requests with shorter timeout
+        if (xSemaphoreTakeRecursive(httpMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
             Serial.println("Bot: Checking for new messages");
             int numNewMessages = 0;
             
@@ -39,40 +48,59 @@ void Bot::checkNewMessages()
                 Serial.println("Bot: Getting Telegram updates");
                 numNewMessages = bot->getUpdates(bot->last_message_received + 1);
                 Serial.println("Bot: Got Telegram updates");
+                
+                // Reset error count on successful request
+                consecutiveErrors = 0;
             } catch (...) {
                 Serial.println("Bot: Error getting Telegram updates");
+                consecutiveErrors++;
                 xSemaphoreGive(httpMutex);
                 lastTimeBotRan = millis();
                 return;
             }
 
-            while (numNewMessages)
+            // Process messages but limit processing time
+            int processedMessages = 0;
+            const int MAX_MESSAGES_PER_CYCLE = 5; // Limit messages processed per cycle
+            
+            while (numNewMessages && processedMessages < MAX_MESSAGES_PER_CYCLE)
             {            
                 Serial.printf("Bot: Processing %d new messages\n", numNewMessages);
-                handleNewMessages(numNewMessages);    
+                handleNewMessages(min(numNewMessages, MAX_MESSAGES_PER_CYCLE - processedMessages));    
+                processedMessages += min(numNewMessages, MAX_MESSAGES_PER_CYCLE - processedMessages);
                 Serial.println("Bot: Finished processing messages");        
+                
+                // Only get more messages if we haven't hit our limit
+                if (processedMessages >= MAX_MESSAGES_PER_CYCLE) {
+                    break;
+                }
                 
                 // Add safety check to prevent infinite loop
                 int nextMessages = 0;
                 try {
-                    Serial.printf("last_message_received: %ld\n", bot->last_message_received);
                     nextMessages = bot->getUpdates(bot->last_message_received + 1);
-                    Serial.printf("new last_message_received: %ld\n", bot->last_message_received);
                 } catch (...) {
                     Serial.println("Bot: Error getting next Telegram updates");
+                    consecutiveErrors++;
                     break;
                 }
                 numNewMessages = nextMessages;
             }
             
-            // Release mutex
+            // Release mutex quickly
             Serial.println("Bot: normal mutex release");
             xSemaphoreGive(httpMutex);
         } else {
             Serial.println("Bot: Failed to acquire HTTP mutex - skipping update");
+            consecutiveErrors++;
         }
         
         lastTimeBotRan = millis();
+        
+        // Log backoff state
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            Serial.printf("Bot: In error backoff mode (%d errors), using %d ms delay\n", consecutiveErrors, currentDelay);
+        }
     }
 }
 
@@ -127,7 +155,7 @@ void Bot::sendBotControlMessage(String &chat_id)
 {
     // Take mutex to coordinate HTTP requests
     Serial.println("Bot: Attempting to take semaphore in sendBotControlMessage");
-    if (xSemaphoreTakeRecursive(httpMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+    if (xSemaphoreTakeRecursive(httpMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
         Serial.println("Bot: Successfully took semaphore in sendBotControlMessage");
         static const char message[] PROGMEM = "Hello";
         

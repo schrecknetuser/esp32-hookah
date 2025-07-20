@@ -31,7 +31,7 @@ typedef struct {
 #define DEEP_SLEEP_TIMEOUT_MINUTES 5
 #define DEEP_SLEEP_TIMEOUT_SECONDS 0
 #define MAIN_LOOP_DELAY_MS 100  // Reduced from 1ms to 100ms
-#define BOT_LOOP_DELAY_MS 1000  // Reduced from 1ms to 2 seconds
+#define BOT_LOOP_DELAY_MS 2000  // Reduced from 1ms to 2 seconds
 
 // Memory monitoring (debug only - should be disabled in production)
 #define ENABLE_MEMORY_MONITORING 1
