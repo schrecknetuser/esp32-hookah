@@ -2,7 +2,8 @@
 
 InputModule::InputModule(LCD* lcd)
 {
-    bot = new Bot(client);
+    // TEMPORARILY DISABLED: Bot creation causing HTTP socket errors
+    bot = nullptr;  // Don't create bot instance to avoid socket issues
     touchScreen = new TouchScreen();
     touchProcessor = lcd;
 
@@ -60,25 +61,16 @@ void InputModule::processTouchScreen()
 
 void InputModule::pollBot()
 {
-    bot->checkNewMessages();
+    // TEMPORARILY DISABLED: Bot functionality causing HTTP socket errors
+    // Do nothing - bot is disabled to fix socket management issues
+    return;
 }
 
 void InputModule::processBot()
 {
-    
-    if(bot->isStartRequested())
-        startRequested = true;
-    if(bot->isStopRequested())
-        stopRequested = true;
-    if(bot->isResetRequested())
-        resetRequested = true;
-    if(bot->isSetTimeRequested())
-    {
-        setTimeRequested = true;
-        requestedMinutes = bot->getRequestedMinutes();
-        requestedSeconds = bot->getRequestedSeconds();
-    }
-    bot->clearRequests();
+    // TEMPORARILY DISABLED: Bot functionality causing HTTP socket errors
+    // Do nothing - bot requests are disabled
+    return;
 }
 
 void InputModule::processRequests()

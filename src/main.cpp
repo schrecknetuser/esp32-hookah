@@ -64,30 +64,14 @@ void mainLoop(void *context)
 
 void botLoop(void *context)
 {
-  // Watchdog variables to detect hangs
-  unsigned long lastBotActivity = millis();
-  const unsigned long BOT_WATCHDOG_TIMEOUT = 30000; // 30 seconds
+  // TEMPORARILY DISABLED: Bot functionality causing HTTP socket errors
+  // This disables the Telegram bot to isolate and fix socket management issues
+  Serial.println("Bot: Telegram bot temporarily disabled to fix HTTP socket errors");
   
   while (true)
   {
-    unsigned long loopStart = millis();
-    
-    // Check for watchdog timeout (indicating stuck HTTP requests)
-    if (loopStart - lastBotActivity > BOT_WATCHDOG_TIMEOUT) {
-      Serial.println("Bot: Watchdog timeout detected, restarting ESP32");
-      ESP.restart();
-    }
-    
-    inputModule->pollBot();
-    lastBotActivity = millis();
-    
-    // Log if the bot processing took too long
-    unsigned long processingTime = lastBotActivity - loopStart;
-    if (processingTime > 10000) { // Log if processing takes > 10 seconds
-      Serial.printf("Bot: Long processing time detected: %lu ms\n", processingTime);
-    }
-    
-    vTaskDelay(pdMS_TO_TICKS(BOT_LOOP_DELAY_MS));
+    // Keep the task alive but don't poll the bot
+    vTaskDelay(pdMS_TO_TICKS(30000)); // Sleep for 30 seconds
   }
 }
 
