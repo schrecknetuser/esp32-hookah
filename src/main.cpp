@@ -64,9 +64,29 @@ void mainLoop(void *context)
 
 void botLoop(void *context)
 {
+  // Watchdog variables to detect hangs
+  unsigned long lastBotActivity = millis();
+  const unsigned long BOT_WATCHDOG_TIMEOUT = 30000; // 30 seconds
+  
   while (true)
   {
+    unsigned long loopStart = millis();
+    
+    // Check for watchdog timeout (indicating stuck HTTP requests)
+    if (loopStart - lastBotActivity > BOT_WATCHDOG_TIMEOUT) {
+      Serial.println("Bot: Watchdog timeout detected, restarting ESP32");
+      ESP.restart();
+    }
+    
     inputModule->pollBot();
+    lastBotActivity = millis();
+    
+    // Log if the bot processing took too long
+    unsigned long processingTime = lastBotActivity - loopStart;
+    if (processingTime > 10000) { // Log if processing takes > 10 seconds
+      Serial.printf("Bot: Long processing time detected: %lu ms\n", processingTime);
+    }
+    
     vTaskDelay(pdMS_TO_TICKS(BOT_LOOP_DELAY_MS));
   }
 }
@@ -119,9 +139,9 @@ void setup()
   Serial.print("Free heap before tasks: ");
   Serial.println(ESP.getFreeHeap());
 
-  // Optimized stack sizes for RAM efficiency - reduced botLoop for better stability
-  xTaskCreatePinnedToCore(botLoop, "botLoop", 4096*8, NULL, 1, NULL, 1);  // Reduced to 8KB for stability
-  xTaskCreatePinnedToCore(mainLoop, "mainLoop", 4096*2, NULL, 1, NULL, 0); // Reduced from 4KB to 2KB
+  // Optimized stack sizes for RAM efficiency - larger botLoop for stable HTTP operations  
+  xTaskCreatePinnedToCore(botLoop, "botLoop", 4096*10, NULL, 1, NULL, 1);  // Increased to 10KB for HTTP stability
+  xTaskCreatePinnedToCore(mainLoop, "mainLoop", 4096*2, NULL, 1, NULL, 0); // Keep at 2KB
 
   // Print free heap after creating tasks
   Serial.print("Free heap after tasks: ");

@@ -3,10 +3,19 @@
 
 Bot::Bot(WiFiClientSecure &client)
 {
-
+    // Store client reference for proper socket management
+    this->client = &client;
+    
     client.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
+    
+    // Configure client timeouts to prevent hanging
+    client.setTimeout(5000);  // 5 second timeout
+    client.setConnectTimeout(3000);  // 3 second connect timeout
+    
     bot = new UniversalTelegramBot(BOTtoken, client);
-    //bot->longPoll = 60;
+    // Reduce long poll timeout to prevent socket issues
+    bot->longPoll = 10;  // Shorter polling to prevent socket exhaustion
+    
     lastTimeBotRan = millis();
     consecutiveErrors = 0;  // Initialize error counter
     clearRequests();
@@ -27,6 +36,7 @@ void Bot::checkNewMessages()
     // Implement backoff if we've had consecutive errors
     if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
         currentDelay = ERROR_BACKOFF_DELAY;
+        Serial.printf("Bot: In error backoff mode, delaying %d ms\n", currentDelay);
     }
     
     if (millis() > lastTimeBotRan + currentDelay)
@@ -39,52 +49,46 @@ void Bot::checkNewMessages()
             return;
         }
         
+        // Reset connection if we've had too many consecutive errors
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            resetConnection();
+        }
+        
         // Take mutex to coordinate HTTP requests with shorter timeout
-        if (xSemaphoreTakeRecursive(httpMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+        if (xSemaphoreTakeRecursive(httpMutex, pdMS_TO_TICKS(100)) == pdTRUE) {  // Reduced to 100ms
             Serial.println("Bot: Checking for new messages");
             int numNewMessages = 0;
+            bool requestSuccessful = false;
             
             try {
                 Serial.println("Bot: Getting Telegram updates");
+                
+                // Add pre-request check
+                if (!client || !client->connected()) {
+                    Serial.println("Bot: Client not connected, attempting reconnection");
+                    resetConnection();
+                }
+                
                 numNewMessages = bot->getUpdates(bot->last_message_received + 1);
                 Serial.println("Bot: Got Telegram updates");
+                requestSuccessful = true;
                 
                 // Reset error count on successful request
                 consecutiveErrors = 0;
             } catch (...) {
-                Serial.println("Bot: Error getting Telegram updates");
+                Serial.println("Bot: Exception getting Telegram updates");
                 consecutiveErrors++;
-                xSemaphoreGive(httpMutex);
-                lastTimeBotRan = millis();
-                return;
+                requestSuccessful = false;
             }
-
-            // Process messages but limit processing time
-            int processedMessages = 0;
-            const int MAX_MESSAGES_PER_CYCLE = 5; // Limit messages processed per cycle
             
-            while (numNewMessages && processedMessages < MAX_MESSAGES_PER_CYCLE)
-            {            
-                Serial.printf("Bot: Processing %d new messages\n", numNewMessages);
-                handleNewMessages(min(numNewMessages, MAX_MESSAGES_PER_CYCLE - processedMessages));    
-                processedMessages += min(numNewMessages, MAX_MESSAGES_PER_CYCLE - processedMessages);
+            if (requestSuccessful && numNewMessages > 0) {
+                // Process only a limited number of messages
+                const int MAX_MESSAGES_PER_CYCLE = 3; // Further reduced
+                int messagesToProcess = min(numNewMessages, MAX_MESSAGES_PER_CYCLE);
+                
+                Serial.printf("Bot: Processing %d of %d new messages\n", messagesToProcess, numNewMessages);
+                handleNewMessages(messagesToProcess);    
                 Serial.println("Bot: Finished processing messages");        
-                
-                // Only get more messages if we haven't hit our limit
-                if (processedMessages >= MAX_MESSAGES_PER_CYCLE) {
-                    break;
-                }
-                
-                // Add safety check to prevent infinite loop
-                int nextMessages = 0;
-                try {
-                    nextMessages = bot->getUpdates(bot->last_message_received + 1);
-                } catch (...) {
-                    Serial.println("Bot: Error getting next Telegram updates");
-                    consecutiveErrors++;
-                    break;
-                }
-                numNewMessages = nextMessages;
             }
             
             // Release mutex quickly
@@ -96,11 +100,22 @@ void Bot::checkNewMessages()
         }
         
         lastTimeBotRan = millis();
+    }
+}
+
+void Bot::resetConnection()
+{
+    Serial.println("Bot: Resetting connection due to socket errors");
+    
+    // Stop and restart the client to clear bad socket state
+    if (client) {
+        client->stop();
+        delay(100);  // Small delay to ensure proper cleanup
         
-        // Log backoff state
-        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-            Serial.printf("Bot: In error backoff mode (%d errors), using %d ms delay\n", consecutiveErrors, currentDelay);
-        }
+        // Reconfigure client settings
+        client->setCACert(TELEGRAM_CERTIFICATE_ROOT);
+        client->setTimeout(5000);
+        client->setConnectTimeout(3000);
     }
 }
 

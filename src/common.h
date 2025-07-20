@@ -30,8 +30,8 @@ typedef struct {
 // Power saving configuration
 #define DEEP_SLEEP_TIMEOUT_MINUTES 5
 #define DEEP_SLEEP_TIMEOUT_SECONDS 0
-#define MAIN_LOOP_DELAY_MS 100  // Reduced from 1ms to 100ms
-#define BOT_LOOP_DELAY_MS 2000  // Reduced from 1ms to 2 seconds
+#define MAIN_LOOP_DELAY_MS 100  // Keep at 100ms for timer accuracy
+#define BOT_LOOP_DELAY_MS 5000  // Increased from 2s to 5s to reduce socket load
 
 // Memory monitoring (debug only - should be disabled in production)
 #define ENABLE_MEMORY_MONITORING 1

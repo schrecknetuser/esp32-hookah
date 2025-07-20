@@ -44,21 +44,23 @@ private:
     void processStopCommand();
 
     void botSetup();
+    void resetConnection(); // Add method to reset connection
 
     void sendBotControlMessage(String &chat_id);
 
     void handleNewMessages(int numNewMessages);
 
     UniversalTelegramBot *bot;
+    WiFiClientSecure *client;  // Store client reference for socket management
 
-    // Checks for new messages every 3 seconds to reduce HTTP load.
-    int botRequestDelay = 3000;
+    // Checks for new messages every 5 seconds to reduce HTTP load and prevent socket issues
+    int botRequestDelay = 5000;  // Increased from 3s to 5s
     unsigned long lastTimeBotRan;
 
     // Error recovery state
     int consecutiveErrors = 0;
     static const int MAX_CONSECUTIVE_ERRORS = 3;
-    static const int ERROR_BACKOFF_DELAY = 10000; // 10 seconds
+    static const int ERROR_BACKOFF_DELAY = 15000; // 15 seconds (increased)
 
     bool resetRequested;
     bool startRequested;
