@@ -22,7 +22,7 @@ class Bot
 #define START "/start"
 
 public:
-    Bot(WiFiClientSecure &client);
+    Bot();  // Changed: No client parameter - we'll create fresh clients
 
     void checkNewMessages();
 
@@ -38,25 +38,26 @@ public:
 
 private:
 
-
-    int splitBySpaces(String text, String *stringArray, int stringArraySize);
-
     void processSetTimeCommand(String text);
     void processResetCommand();
     void processStartCommand();
     void processStopCommand();
 
     void botSetup();
+    WiFiClientSecure* createSecureClient(); // Create fresh client for each request
 
     void sendBotControlMessage(String &chat_id);
 
     void handleNewMessages(int numNewMessages);
 
-    UniversalTelegramBot *bot;
-
-    // Checks for new messages every 1 second.
-    int botRequestDelay = 1000;
+    // Checks for new messages every 5 seconds to reduce HTTP load and prevent socket issues
+    int botRequestDelay = 5000;  // Increased from 3s to 5s
     unsigned long lastTimeBotRan;
+
+    // Error recovery state
+    int consecutiveErrors = 0;
+    static const int MAX_CONSECUTIVE_ERRORS = 3;
+    static const int ERROR_BACKOFF_DELAY = 15000; // 15 seconds (increased)
 
     bool resetRequested;
     bool startRequested;

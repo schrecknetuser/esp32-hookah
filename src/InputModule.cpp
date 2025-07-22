@@ -2,7 +2,8 @@
 
 InputModule::InputModule(LCD* lcd)
 {
-    bot = new Bot(client);
+    // Create bot instance - using fresh client approach to avoid socket issues
+    bot = new Bot();
     touchScreen = new TouchScreen();
     touchProcessor = lcd;
 
@@ -60,30 +61,42 @@ void InputModule::processTouchScreen()
 
 void InputModule::pollBot()
 {
-    bot->checkNewMessages();
+    // TEMPORARILY DISABLED: Bot functionality causing HTTP socket errors
+    // Do nothing - bot is disabled to fix socket management issues
+    // return;
+    processBot();
 }
 
 void InputModule::processBot()
 {
-    
-    if(bot->isStartRequested())
-        startRequested = true;
-    if(bot->isStopRequested())
-        stopRequested = true;
-    if(bot->isResetRequested())
-        resetRequested = true;
-    if(bot->isSetTimeRequested())
-    {
-        setTimeRequested = true;
-        requestedMinutes = bot->getRequestedMinutes();
-        requestedSeconds = bot->getRequestedSeconds();
+    // Re-enabled bot functionality with fresh client approach to avoid socket issues
+    if (bot != nullptr) {
+        bot->checkNewMessages();
+        
+        if (bot->isResetRequested()) {
+            resetRequested = true;
+            bot->clearRequests();
+        }
+        if (bot->isStartRequested()) {
+            startRequested = true;
+            bot->clearRequests();
+        }
+        if (bot->isStopRequested()) {
+            stopRequested = true;
+            bot->clearRequests();
+        }
+        if (bot->isSetTimeRequested()) {
+            setTimeRequested = true;
+            requestedMinutes = bot->getRequestedMinutes();
+            requestedSeconds = bot->getRequestedSeconds();
+            bot->clearRequests();
+        }
     }
-    bot->clearRequests();
 }
 
 void InputModule::processRequests()
 {
     processPushButton();
     processTouchScreen();
-    processBot();
+    //processBot();
 }

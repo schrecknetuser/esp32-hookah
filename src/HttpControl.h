@@ -4,6 +4,7 @@
 
 #define MAX_OUTPUT_VALUE 255
 #define PROFILE_NAME "LED1"
+#define MAX_TRIES_COUNT 5
 
 class HttpControl 
 {    
@@ -11,11 +12,11 @@ public:
 
     void setPrimary();
     void setSecondary();
-    void setPercentage(int percentage);
+    void setPercentage(int percentage, bool setPrimary = false);
     
 private:
 
     void sendRequest(JsonDocument &doc);
     void setPrimarySecondary(bool primary);
-    String setPrimaryUrl = "http://led.haven/neon_led_control/led_profiles/set_primary";
+    static const char setPrimaryUrl[];
 };

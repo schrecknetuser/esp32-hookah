@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 enum {
     ROT_0 = 0,
@@ -25,6 +27,16 @@ typedef struct {
 #define POWERSAVING_TIMEOUT_MINUTES 1
 #define POWERSAVING_TIMEOUT_SECONDS 0
 
+// Power saving configuration
+#define DEEP_SLEEP_TIMEOUT_MINUTES 5
+#define DEEP_SLEEP_TIMEOUT_SECONDS 0
+#define MAIN_LOOP_DELAY_MS 100  // Keep at 100ms for timer accuracy
+#define BOT_LOOP_DELAY_MS 5000  // Increased from 2s to 5s to reduce socket load
+
+// Memory monitoring (debug only - should be disabled in production)
+#define ENABLE_MEMORY_MONITORING 1
+#define MEMORY_CHECK_INTERVAL_MS 30000  // Check every 30 seconds
+
 #define SECONDARY_MINUTES 0
 #define SECONDARY_SECONDS 15
 
@@ -36,4 +48,7 @@ typedef struct {
 #define LED_BLUE_PIN 25
 #define PUSHBUTTON_PIN 4
 
-void convertTimeToString(int minutes, int seconds, String& result);
+void convertTimeToString(int minutes, int seconds, char* result, size_t bufferSize);
+
+// HTTP request coordination
+extern SemaphoreHandle_t httpMutex;

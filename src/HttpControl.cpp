@@ -1,18 +1,52 @@
 #include "HttpControl.h"
+#include "common.h"
+
+// Define the URL in flash memory to save RAM
+const char HttpControl::setPrimaryUrl[] = "http://led.haven/neon_led_control/led_profiles/set_primary";
 
 void HttpControl::sendRequest(JsonDocument& doc)
 {
-    String requestBody;
-    HTTPClient http;
-    
-    doc["led_profile_name"] = PROFILE_NAME;
-    
+    int triesCount = 0;
+    while(triesCount < MAX_TRIES_COUNT) 
+    {
+        // Take mutex to coordinate HTTP requests
+        if (xSemaphoreTakeRecursive(httpMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+            Serial.println("HttpControl: Sending LED control request");
+            
+            HTTPClient http;
+            
+            doc["led_profile_name"] = PROFILE_NAME;
+            
+            // Use a char buffer instead of String for request body
+            char requestBody[256];  // Fixed size buffer
+            serializeJson(doc, requestBody, sizeof(requestBody));
 
-    serializeJson(doc, requestBody);
-
-    http.begin(setPrimaryUrl);
-    http.addHeader("Content-Type", "application/json");
-    http.POST(requestBody);
+            http.begin(setPrimaryUrl);
+            http.addHeader("Content-Type", "application/json");
+            
+            // Set timeouts to prevent hanging
+            http.setTimeout(5000);  // 5 second timeout
+            http.setConnectTimeout(3000);  // 3 second connect timeout
+            
+            int httpResponseCode = http.POST(requestBody);
+            
+            // Log the response for debugging
+            if (httpResponseCode > 0) {
+                Serial.printf("HTTP Response: %d\n", httpResponseCode);
+            } else {
+                Serial.printf("HTTP Error: %s\n", http.errorToString(httpResponseCode).c_str());
+            }
+            
+            http.end();  // Free resources
+            
+            // Release mutex
+            xSemaphoreGive(httpMutex);
+            break;
+        } else {
+            Serial.println("HttpControl: Failed to acquire HTTP mutex - skipping request");
+        }
+    }
+    
 }
 
 void HttpControl::setPrimarySecondary(bool primary)
@@ -22,9 +56,13 @@ void HttpControl::setPrimarySecondary(bool primary)
     sendRequest(doc);
 }
 
-void HttpControl::setPercentage(int percentage)
+void HttpControl::setPercentage(int percentage, bool setPrimary)
+
 {
     JsonDocument doc;
+    if(setPrimary) {
+        doc["primary"] = true;
+    }
     doc["percentage"] = percentage;
     sendRequest(doc);
 }

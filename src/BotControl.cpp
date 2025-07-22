@@ -1,12 +1,10 @@
 #include "BotControl.h"
+#include "common.h"
 
-Bot::Bot(WiFiClientSecure &client)
+Bot::Bot()
 {
-
-    client.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
-    bot = new UniversalTelegramBot(BOTtoken, client);
-    bot->longPoll = 60;
     lastTimeBotRan = millis();
+    consecutiveErrors = 0;  // Initialize error counter
     clearRequests();
 }
 
@@ -18,57 +16,133 @@ void Bot::clearRequests()
     setTimeRequested = false;
 }
 
+WiFiClientSecure* Bot::createSecureClient()
+{
+    WiFiClientSecure* client = new WiFiClientSecure();
+    
+    // Configure the client for Telegram API
+    client->setCACert(TELEGRAM_CERTIFICATE_ROOT);
+    client->setTimeout(10000);  // 10 second timeout
+    client->setConnectionTimeout(5000);  // 5 second connect timeout
+    
+    return client;
+}
+
 void Bot::checkNewMessages()
 {
-    if (millis() > lastTimeBotRan + botRequestDelay)
+    int currentDelay = botRequestDelay;
+    
+    // Implement backoff if we've had consecutive errors
+    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        currentDelay = ERROR_BACKOFF_DELAY;
+        Serial.printf("Bot: In error backoff mode, delaying %d ms\n", currentDelay);
+    }
+    
+    if (millis() > lastTimeBotRan + currentDelay)
     {
-        int numNewMessages = bot->getUpdates(bot->last_message_received + 1);
-
-        while (numNewMessages)
-        {            
-            handleNewMessages(numNewMessages);            
-            numNewMessages = bot->getUpdates(bot->last_message_received + 1);
+        // Check if WiFi is connected before making requests
+        if (WiFi.status() != WL_CONNECTED) {
+            Serial.println("Bot: WiFi not connected, skipping bot check");
+            lastTimeBotRan = millis();
+            consecutiveErrors++; // Treat WiFi disconnection as error for backoff
+            return;
         }
+        
+        // Take mutex to coordinate HTTP requests with reasonable timeout
+        if (xSemaphoreTakeRecursive(httpMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+            Serial.println("Bot: Checking for new messages");
+            
+            // Create a fresh client for this request to avoid socket reuse issues
+            WiFiClientSecure* client = createSecureClient();
+            UniversalTelegramBot bot(BOTtoken, *client);
+            //bot.longPoll = 10;  // Short polling to prevent socket issues
+            bot.longPoll = 0;  // Disable long polling to avoid socket issues
+            
+            int numNewMessages = 0;
+            bool requestSuccessful = false;
+            
+            try {
+                Serial.println("Bot: Getting Telegram updates with fresh client");
+                
+                numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+                Serial.printf("Bot: Got %d Telegram updates\n", numNewMessages);
+                requestSuccessful = true;
+                
+                // Reset error count on successful request
+                consecutiveErrors = 0;
+                
+                if (numNewMessages > 0) {
+                    // Process only a limited number of messages
+                    const int MAX_MESSAGES_PER_CYCLE = 3;
+                    int messagesToProcess = min(numNewMessages, MAX_MESSAGES_PER_CYCLE);
+                    
+                    Serial.printf("Bot: Processing %d of %d new messages\n", messagesToProcess, numNewMessages);
+                    
+                    for (int i = 0; i < messagesToProcess; i++) {
+                        String text = bot.messages[i].text;
+                        String from_name = bot.messages[i].from_name;
+                        String chat_id = bot.messages[i].chat_id;
+
+                        Serial.println("Message: " + text);
+
+                        if (text == RESET_REQUEST) {
+                            processResetCommand();
+                            bot.sendMessage(chat_id, "Reset requested", "");
+                        } else if (text == START_REQUEST) {
+                            processStartCommand();
+                            bot.sendMessage(chat_id, "Start requested", "");
+                        } else if (text == STOP_REQUEST) {
+                            processStopCommand();
+                            bot.sendMessage(chat_id, "Stop requested", "");
+                        } else if (text.startsWith(SET_TIME_REQUEST)) {
+                            processSetTimeCommand(text);
+                            bot.sendMessage(chat_id, "Set time requested", "");
+                        } else if (text == START) {
+                            sendBotControlMessage(chat_id);
+                        }
+                    }
+                    
+                    Serial.println("Bot: Finished processing messages");        
+                }
+            } catch (...) {
+                Serial.println("Bot: Exception getting Telegram updates");
+                consecutiveErrors++;
+                requestSuccessful = false;
+            }
+            
+            // Clean up the client immediately after use
+            client->stop();
+            delete client;
+            client = nullptr;
+            
+            // Release mutex quickly
+            Serial.println("Bot: Releasing HTTP mutex");
+            xSemaphoreGive(httpMutex);
+        } else {
+            Serial.println("Bot: Failed to acquire HTTP mutex - skipping update");
+            consecutiveErrors++;
+        }
+        
         lastTimeBotRan = millis();
     }
 }
 
-int Bot::splitBySpaces(String text, String *stringArray, int stringArraySize)
-{
-    int i = 0;
-    int k = 0;
-    int n = 0;
-    int cnt = 0;
-    char string[MAX_STRING_LENGTH];
-
-    while (cnt < stringArraySize)
-    {
-        while (text[i] != ' ' && text[i])
-        {
-            string[k] = text[i];
-            i++;
-            k++;
-        }
-        i++;
-        string[k] = 0;
-        stringArray[n] = string;
-        k = 0;
-        n++;
-        cnt++;
-    }
-
-    return n;
-}
-
 void Bot::processSetTimeCommand(String text)
 {
-    String stringArray[2];
-    char output[MAX_STRING_LENGTH];
-
-    if(splitBySpaces(text, stringArray, 2) != 2)
-        return;
-
-    sscanf(stringArray[1].c_str(), "%d:%d", &requestedMinutes, &requestedSeconds);
+    char stringArray[2][MAX_STRING_LENGTH];  // Static allocation instead of String array
+    char tempBuffer[MAX_STRING_LENGTH];
+    
+    strncpy(tempBuffer, text.c_str(), sizeof(tempBuffer) - 1);
+    tempBuffer[sizeof(tempBuffer) - 1] = '\0';
+    
+    // Simple parsing: find space and split
+    char* space = strchr(tempBuffer, ' ');
+    if (!space) return;
+    
+    *space = '\0';  // Split the string
+    char* timeStr = space + 1;
+    
+    sscanf(timeStr, "%d:%d", &requestedMinutes, &requestedSeconds);
     setTimeRequested = true;
 }
 
@@ -87,7 +161,6 @@ void Bot::processStopCommand()
     stopRequested = true;
 }
 
-
 void Bot::botSetup()
 {
     /*bool result = bot->setMyCommands(F("["
@@ -102,60 +175,28 @@ void Bot::botSetup()
 
 void Bot::sendBotControlMessage(String &chat_id)
 {
-    String message;
-    String currentTime;
-    message = "Hello";
-
-    bot->sendMessage(chat_id, message, "");
-    String keyboardJson = F(
+    // Create a fresh client for sending messages to avoid socket reuse issues
+    WiFiClientSecure* client = createSecureClient();
+    UniversalTelegramBot tempBot(BOTtoken, *client);
+    
+    static const char message[] PROGMEM = "Hello";
+    tempBot.sendMessage(chat_id, FPSTR(message), "");
+    
+    // Store keyboard JSON in flash memory to save RAM
+    static const char keyboardJson[] PROGMEM = 
         "["
         "[{\"text\":\"Reset\", \"callback_data\":\"" RESET_REQUEST "\"}, {\"text\":\"Start\", \"callback_data\":\"" START_REQUEST "\"}," 
         "{\"text\":\"Stop\", \"callback_data\":\"" STOP_REQUEST "\"}]," 
         "[{\"text\":\"5 min\", \"callback_data\":\"" SET_TIME_REQUEST " 5:00\"}," 
         "{\"text\":\"7 min\", \"callback_data\":\"" SET_TIME_REQUEST " 7:00\"},"
         "{\"text\":\"10 min\", \"callback_data\":\"" SET_TIME_REQUEST " 10:00\"}]"
-        "]");
-    bot->sendMessageWithInlineKeyboard(chat_id, "Choose from one of the following options", "", keyboardJson);
-}
-
-// Handle what happens when you receive new messages
-void Bot::handleNewMessages(int numNewMessages)
-{
-
-
-    for (int i = 0; i < numNewMessages; i++)
-    {
-        String chat_id = String(bot->messages[i].chat_id);
-        if (chat_id != CHAT_ID)
-        {
-            bot->sendMessage(chat_id, "Unauthorized user", "");
-            continue;
-        }
-
-        String text = bot->messages[i].text;
-
-        String from_name = bot->messages[i].from_name;
-
-        if (text == START)
-        {
-            String welcome = "Welcome, " + from_name + ".\n";
-            welcome += "Use the following commands to control your outputs.\n\n";
-            welcome += "" RESET_REQUEST " - reset\n";
-            welcome += "" SET_TIME_REQUEST " <time> - set cycle time\n";
-            welcome += "" START_REQUEST " - start the timer\n";
-            welcome += "" STOP_REQUEST " - stop the timer\n";
-            bot->sendMessage(chat_id, welcome, "");
-            sendBotControlMessage(chat_id);
-        }
-
-        if (text.startsWith(RESET_REQUEST))
-            processResetCommand();            
-        else if (text.startsWith(SET_TIME_REQUEST))
-            processSetTimeCommand(text);
-        else if (text.startsWith(START_REQUEST))
-            processStartCommand();
-        else if (text.startsWith(STOP_REQUEST))
-            processStopCommand();        
-        sendBotControlMessage(chat_id);
-    }
+        "]";
+    
+    static const char controlMsg[] PROGMEM = "Choose from one of the following options";
+    tempBot.sendMessageWithInlineKeyboard(chat_id, FPSTR(controlMsg), "", FPSTR(keyboardJson));
+    
+    // Clean up the client immediately after use
+    client->stop();
+    delete client;
+    client = nullptr;
 }
